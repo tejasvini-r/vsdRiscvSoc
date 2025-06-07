@@ -1,0 +1,27 @@
+# 🧩 WEEK1 / Task-2: Cross-Compiling Hello World for RV32IMC
+
+## ✅ Objective:
+Compile a simple C program using the RISC-V GCC toolchain targeting the RV32IMC ISA.
+
+---
+
+## 📄 Source Code: `hello.c`
+
+```c
+#include <stdio.h>
+
+int main() {
+    printf("Hello, RISC-V!\n");
+    return 0;
+}
+🔧 Compilation Command
+riscv32-unknown-elf-gcc -march=rv32imc -mabi=ilp32 -o hello.elf hello.c
+
+📦 Verifying the ELF Output
+To check if the ELF binary is correct:
+file hello.elf
+
+✅ Expected Output:
+hello.elf: ELF 32-bit LSB executable, UCB RISC-V, ...
+This confirms the binary is for RV32IMC (32-bit RISC-V).
+
