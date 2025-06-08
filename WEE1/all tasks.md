@@ -1485,7 +1485,5 @@ This confirms **little-endian** ordering: least significant byte (`0x04`) is sto
 
 ## Conclusion
 
-Yes, **RV32 is little-endian by default**. Using a union of `uint32_t` and `uint8_t[4]`, we can clearly visualize how bytes are laid out in memory.
-
-
+ **RV32 is little-endian by default**. Using a union of `uint32_t` and `uint8_t[4]`, we can clearly visualize how bytes are laid out in memory.
 
