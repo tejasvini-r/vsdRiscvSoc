@@ -1209,3 +1209,281 @@ int main() {
 ### ✅ Summary
 This pseudo-threaded simulation uses `lr.w`/`sc.w` instructions to implement a spinlock mutex mechanism on RV32. The inline assembly handles atomic locking, making it suitable for multi-core RISC-V systems.
 
+
+
+![Image](https://github.com/user-attachments/assets/857acc0b-0415-4e8f-af95-11c994212d55)
+
+
+
+
+# Task 16: Using Newlib `printf` Without an OS - UART Retargeting
+
+## Objective
+
+Retarget Newlib's `_write` system call so that `printf` sends bytes to a memory-mapped UART instead of requiring an operating system. Demonstrate working output in a bare-metal RISC-V setup.
+
+---
+
+## Prerequisites
+
+* ✅ Task 15 completed (atomic ops, mutex understanding)
+* ✅ RISC-V GCC toolchain with Newlib
+* ✅ Knowledge of memory-mapped I/O
+* ✅ Familiarity with custom linker script and syscall redirection
+
+---
+
+## Step-by-Step Instructions
+
+### Step 1: Create `task16_uart_printf.c`
+
+```c
+#include <stdio.h>
+#include <stdint.h>
+#include <unistd.h>
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <errno.h>
+
+void test_printf_functionality(void) {
+    printf("Hello, RISC-V printf!\n");
+    printf("Testing integer output: %d\n", 42);
+    printf("Testing hex output: 0x%08X\n", 0xDEADBEEF);
+    printf("Testing string output: %s\n", "UART-based printf working!");
+    printf("Testing character output: %c\n", 'A');
+}
+
+int main() {
+    printf("=== Task 16: Newlib printf Without OS ===\n");
+    printf("UART-based printf implementation\n\n");
+    test_printf_functionality();
+    printf("\nPrintf retargeting to UART successful!\n");
+    return 0;
+}
+```
+
+### Step 2: Create `syscalls.c`
+
+```c
+#include <sys/stat.h>
+#include <unistd.h>
+#include <stdint.h>
+#include <errno.h>
+
+#define UART_TX (*(volatile uint32_t *)0x10000000)
+
+void uart_putchar(char c) {
+    UART_TX = (uint32_t)c;
+}
+
+int _write(int fd, char *buf, int len) {
+    if (fd == STDOUT_FILENO || fd == STDERR_FILENO) {
+        for (int i = 0; i < len; i++) {
+            uart_putchar(buf[i]);
+            if (buf[i] == '\n') uart_putchar('\r');
+        }
+        return len;
+    }
+    return -1;
+}
+
+int _close(int fd) { return -1; }
+int _fstat(int fd, struct stat *st) { if (fd <= 2) { st->st_mode = S_IFCHR; return 0; } return -1; }
+int _isatty(int fd) { return (fd <= 2) ? 1 : 0; }
+int _lseek(int fd, int offset, int whence) { return -1; }
+int _read(int fd, char *buf, int len) { return -1; }syscalls.c
+```
+
+### Step 3: Create Alternative `task16_final_working.c`
+
+```c
+#include <stdio.h>
+#include <stdint.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#include <errno.h>
+
+#define UART_BASE 0x10000000
+#define UART_TX_REG (*(volatile uint32_t *)(UART_BASE + 0x00))
+
+void uart_putchar(char c) {
+    UART_TX_REG = (uint32_t)c;
+}
+
+int _write(int fd, char *buf, int len) {
+    if (fd == STDOUT_FILENO || fd == STDERR_FILENO) {
+        for (int i = 0; i < len; i++) {
+            uart_putchar(buf[i]);
+            if (buf[i] == '\n') uart_putchar('\r');
+        }
+        return len;
+    }
+    return -1;
+}
+
+int _close(int fd) { return -1; }
+int _fstat(int fd, struct stat *st) { if (fd <= 2) { st->st_mode = S_IFCHR; return 0; } return -1; }
+int _isatty(int fd) { return (fd <= 2) ? 1 : 0; }
+int _lseek(int fd, int offset, int whence) { return -1; }
+int _read(int fd, char *buf, int len) { return -1; }
+
+int main() {
+    printf("=== Task 16: Printf Working Successfully! ===\n");
+    printf("UART-based printf retargeting demonstration\n\n");
+    printf("Testing different printf formats:\n");
+    printf("- Integer: %d\n", 42);
+    printf("- Hexadecimal: 0x%08X\n", 0xDEADBEEF);
+    printf("- String: %s\n", "Hello from RISC-V!");
+    printf("- Character: %c\n", 'A');
+    printf("- Negative integer: %d\n", -123);
+    printf("\n_write() retargeting to UART successful!\n");
+    printf("All printf output goes to memory-mapped UART!\n");
+    return 0;
+}
+```
+
+### Step 4: Create `printf_start.s`
+
+```asm
+.section .text
+.global _start
+_start:
+    call main
+    tail exit
+```
+
+### Step 5: Create `printf.ld`
+
+```ld
+ENTRY(_start)
+SECTIONS {
+    . = 0x80000000;
+    .text : { *(.text*) }
+    .rodata : { *(.rodata*) }
+    .data : { *(.data*) }
+    .bss : { *(.bss*) *(COMMON) }
+    PROVIDE(_stack_top = . + 0x1000);
+}
+```
+
+### Step 6: Create Build Script `build_printf_demo.sh`
+
+```bash
+#!/bin/bash
+
+echo "=== Task 16: Newlib printf Without OS (FINAL FIX) ==="
+
+# Compile startup code
+echo "1. Compiling startup code..."
+riscv32-unknown-elf-gcc -march=rv32imc -c printf_start.s -o printf_start.o
+
+# Compile single-file working version
+echo "2. Compiling single-file working version..."
+riscv32-unknown-elf-gcc -march=rv32imc -c task16_final_working.c -o task16_final_working.o
+riscv32-unknown-elf-gcc -T printf.ld -nostartfiles printf_start.o task16_final_working.o -o task16_final_working.elf
+
+# Compile multi-file version
+echo "3. Compiling multi-file version (duplicates removed)..."
+riscv32-unknown-elf-gcc -march=rv32imc -c task16_uart_printf.c -o task16_uart_printf.o
+riscv32-unknown-elf-gcc -march=rv32imc -c syscalls.c -o syscalls.o
+riscv32-unknown-elf-gcc -T printf.ld -nostartfiles printf_start.o task16_uart_printf.o syscalls.o -o task16_uart_printf.elf
+
+# Check ELF
+file task16_final_working.elf
+echo -e "\n5. _write symbol:"
+riscv32-unknown-elf-nm task16_final_working.elf | grep _write
+
+echo -e "\n6. UART MMIO register usage:"
+riscv32-unknown-elf-objdump -d task16_final_working.elf | grep -A 2 "0x10000000" | head -5
+
+echo -e "\n7. Printf calls present:"
+riscv32-unknown-elf-nm task16_final_working.elf | grep printf
+
+echo "\n✓ All builds complete and verified."
+```
+
+---
+
+## ✅ To Run in Terminal
+
+Make sure all files are in one directory. Then:
+
+```bash
+chmod +x build_printf_demo.sh
+./build_printf_demo.sh
+```
+
+---
+
+
+
+
+
+# Task 17: Endianness & Struct Packing
+
+## Question
+
+Is RV32 little-endian by default? Show how to verify byte ordering using a union trick in C.
+
+---
+
+## Objective
+
+Demonstrate RISC-V RV32's default endianness (little-endian) by storing a 32-bit value and printing its byte representation.
+
+---
+
+## Step-by-Step Demo
+
+### Step 1: Create `task17_endianness.c`
+
+```c
+#include <stdio.h>
+#include <stdint.h>
+
+int main() {
+    union {
+        uint32_t value;
+        uint8_t bytes[4];
+    } data;
+
+    data.value = 0x01020304;
+
+    printf("Storing 0x01020304 in a uint32_t.\n");
+    printf("Byte order in memory:\n");
+    for (int i = 0; i < 4; i++) {
+        printf("byte[%d] = 0x%02X\n", i, data.bytes[i]);
+    }
+
+    return 0;
+}
+```
+
+### Step 2: Compile and Run
+
+```bash
+riscv32-unknown-elf-gcc -o task17_endianness.elf task17_endianness.c
+spike pk task17_endianness.elf
+```
+
+---
+
+## Expected Output (on RV32)
+
+```
+Storing 0x01020304 in a uint32_t.
+Byte order in memory:
+byte[0] = 0x04
+byte[1] = 0x03
+byte[2] = 0x02
+byte[3] = 0x01
+```
+
+This confirms **little-endian** ordering: least significant byte (`0x04`) is stored at the lowest address.
+
+---
+
+## Conclusion
+
+ **RV32 is little-endian by default**. Using a union of `uint32_t` and `uint8_t[4]`, we can clearly visualize how bytes are laid out in memory.
+
