@@ -1110,3 +1110,102 @@ The compiler translates these intrinsics into `amoswap.w` or similar AMO instruc
 **Tags**: RISC-V, ISA extensions, RV32IMAC, atomic operations, embedded systems, concurrency
 
 ![Image](https://github.com/user-attachments/assets/ceb976f2-dd6f-47e1-9bfa-96486e6f4042)
+
+
+
+
+## Task 15: Two-thread Mutex using LR/SC on RV32
+
+This example demonstrates a simple mutex using LR/SC (Load-Reserved / Store-Conditional) in RV32 with a pseudo-threaded structure in main().
+
+### Step-by-Step Breakdown
+
+#### ✅ Step 1: Include Necessary Headers
+```c
+#include <stdio.h>
+#include <stdint.h>
+#include <stdatomic.h>
+```
+- Standard headers for I/O, integer types, and atomic operations.
+
+#### ✅ Step 2: Declare Global Lock Variable
+```c
+volatile int lock = 0;
+```
+- `lock = 0` means unlocked.
+- `volatile` ensures the compiler does not optimize access.
+
+#### ✅ Step 3: Lock Function Using `lr.w`/`sc.w`
+```c
+void lock_mutex(volatile int *lock) {
+    int tmp;
+    while (1) {
+        __asm__ __volatile__ (
+            "lr.w %0, (%1)\n"
+            "bnez %0, 1f\n"
+            "li %0, 1\n"
+            "sc.w %0, %0, (%1)\n"
+            "bnez %0, 1f\n"
+            "j 2f\n"
+            "1: nop\n"
+            "2:"
+            : "=&r"(tmp)
+            : "r"(lock)
+            : "memory"
+        );
+        if (tmp == 0) break;
+    }
+}
+```
+- `lr.w`: loads value and reserves address.
+- `sc.w`: stores only if no one changed the value after `lr.w`.
+- Loop ensures retry until lock acquired.
+
+#### ✅ Step 4: Unlock Function
+```c
+void unlock_mutex(volatile int *lock) {
+    __asm__ __volatile__ ("sw zero, 0(%0)" :: "r"(lock) : "memory");
+}
+```
+- Writes `0` to unlock the mutex.
+
+#### ✅ Step 5: Simulate Thread 1
+```c
+void thread1() {
+    for (int i = 0; i < 5; i++) {
+        lock_mutex(&lock);
+        printf("[Thread 1] Critical section %d\n", i);
+        unlock_mutex(&lock);
+    }
+}
+```
+
+#### ✅ Step 6: Simulate Thread 2
+```c
+void thread2() {
+    for (int i = 0; i < 5; i++) {
+        lock_mutex(&lock);
+        printf("[Thread 2] Critical section %d\n", i);
+        unlock_mutex(&lock);
+    }
+}
+```
+
+#### ✅ Step 7: Main Function (Pseudo-Thread Simulation)
+```c
+int main() {
+    printf("--- RV32 LR/SC Mutex Simulation ---\n");
+    for (int i = 0; i < 5; i++) {
+        thread1();
+        thread2();
+    }
+    return 0;
+}
+```
+- Alternates execution of thread1 and thread2 to simulate concurrency.
+
+---
+
+### ✅ Summary
+This pseudo-threaded simulation uses `lr.w`/`sc.w` instructions to implement a spinlock mutex mechanism on RV32. The inline assembly handles atomic locking, making it suitable for multi-core RISC-V systems.
+
