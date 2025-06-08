@@ -1411,8 +1411,10 @@ Make sure all files are in one directory. Then:
 ```bash
 chmod +x build_printf_demo.sh
 ./build_printf_demo.sh
-```
 
+
+```
+![Image](https://github.com/user-attachments/assets/add2e55c-07b6-4028-a4c1-fdcae71c912a)
 ---
 
 
@@ -1481,9 +1483,16 @@ byte[3] = 0x01
 
 This confirms **little-endian** ordering: least significant byte (`0x04`) is stored at the lowest address.
 
+
 ---
 
 ## Conclusion
 
  **RV32 is little-endian by default**. Using a union of `uint32_t` and `uint8_t[4]`, we can clearly visualize how bytes are laid out in memory.
+
+
+ ![Image](https://github.com/user-attachments/assets/45a7f351-edc8-4f84-aab2-2a364fcf78fd)
+
+
+ ![Image](https://github.com/user-attachments/assets/cc402e40-e1e0-4eb9-9276-f4550b098671)
 
